@@ -86,8 +86,11 @@ function getHeaders(init?: HeadersInit) {
   return headers
 }
 
-function getBody(method: Method, payload: Record<string, unknown>) {
-  const body = sendBody(method) ? JSON.stringify(payload) : undefined
+function getBody(method: Method, payload: Record<string, unknown>, isFormUrlencoded: boolean) {
+  // TODO: type check for payload
+  const body = sendBody(method)
+    ? (isFormUrlencoded ? new URLSearchParams(payload as Record<string, string>) : JSON.stringify(payload))
+    : undefined
   // if delete don't send body if empty
   return method === 'delete' && body === '{}' ? undefined : body
 }
@@ -115,12 +118,13 @@ function getFetchParams(request: Request) {
   const query = getQuery(request.method, payload, request.queryParams)
   const headers = getHeaders(request.init?.headers)
   const url = request.baseUrl + path + query
+  const isFormUrlencoded = headers.get('content-type')?.indexOf('application/x-www-form-urlencoded') !== -1
 
   const init = {
     ...request.init,
     method: request.method.toUpperCase(),
     headers,
-    body: getBody(request.method, payload),
+    body: getBody(request.method, payload, isFormUrlencoded),
   }
 
   return { url, init }
@@ -234,7 +238,7 @@ function fetcher<Paths>() {
     path: <P extends keyof Paths>(path: P) => ({
       method: <M extends keyof Paths[P]>(method: M) => ({
         create: ((queryParams?: Record<string, true | 1>) =>
-          createFetch((payload, init) =>
+          createFetch((payload: any, init) =>
             fetchUrl({
               baseUrl: baseUrl || '',
               path: path as string,
